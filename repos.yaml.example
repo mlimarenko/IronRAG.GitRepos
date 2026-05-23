@@ -1,0 +1,63 @@
+# Tracked git repositories.
+#
+# Each entry describes one repository and the branches the connector
+# should mirror into IronRAG. A single connector can track many repos;
+# every (repo, branch, path) triple becomes one IronRAG document.
+#
+# Either `url` (remote — bare-cloned and `git fetch`'d on every sweep)
+# or `local_path` (already on the host — read in place) must be set,
+# but not both. SSH keys / credential helpers are mounted at the
+# container level; the connector itself stores no vendor credentials.
+#
+# `include` / `exclude` are glob patterns with `**` matching any path
+# depth. `.git/**`, common dependency dirs, and build outputs are
+# excluded automatically — see DEFAULT_EXCLUDES in
+# `src/gitrepos_connector/repos.py`.
+#
+# `facts` are surfaced as `routing_facts` on every emitted ref so
+# `routing.yaml` can match against them with the same syntax used for
+# the built-in keys (`repo`, `branch`, `path`, `dir`, `ext`, `top_dir`).
+
+repos:
+  - name: docs-public
+    url: https://github.com/example-org/docs.git
+    branches:
+      - main
+      - release/v1
+    include:
+      - "**/*.md"
+      - "**/*.mdx"
+      - "**/*.rst"
+    exclude:
+      - "drafts/**"
+      - "**/CHANGELOG.md"
+    facts:
+      project: example-docs
+      tier: public
+
+  - name: api-server
+    url: git@github.com:example-org/api-server.git
+    branches:
+      - main
+    include:
+      - "src/**/*.py"
+      - "docs/**/*.md"
+      - "README.md"
+    facts:
+      project: api-server
+      tier: production
+
+  - name: local-playground
+    local_path: /srv/checkouts/playground
+    branches:
+      - main
+      - experimental
+    include:
+      - "**/*.md"
+      - "**/*.txt"
+    facts:
+      project: playground
+      tier: scratch
+    # Override the global 1 MiB ceiling per-repo for repositories with
+    # legitimately large markdown bundles.
+    max_file_bytes: 4194304

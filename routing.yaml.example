@@ -1,0 +1,52 @@
+# Git file → IronRAG (workspace, library) routing rules.
+#
+# The git adapter emits these `routing_facts` per file:
+#   repo, branch, path, dir, ext, top_dir
+# plus any custom keys from the repo's `facts:` block in repos.yaml.
+#
+# Order matters: the first rule whose `match` block fully holds wins.
+# Targets may omit `workspace`; in that case `default.workspace` is used.
+
+default:
+  workspace: 00000000-0000-0000-0000-000000000000
+  library:   00000000-0000-0000-0000-000000000000
+
+rules:
+  - description: "All of docs-public repo to the public docs library"
+    match:
+      repo: docs-public
+    target:
+      library: 00000000-0000-0000-0000-000000000001
+
+  - description: "Release branches of any repo to the release library"
+    match:
+      branch: release/v1
+    target:
+      library: 00000000-0000-0000-0000-000000000002
+
+  - description: "API server code goes to engineering library"
+    match:
+      repo: api-server
+      top_dir: src
+    target:
+      library: 00000000-0000-0000-0000-000000000003
+
+  - description: "Anything tagged tier=production to the prod knowledge library"
+    match:
+      tier: production
+    target:
+      library: 00000000-0000-0000-0000-000000000004
+
+  - description: "Markdown files in the playground go to the scratch workspace"
+    match:
+      repo: local-playground
+      ext: md
+    target:
+      workspace: 00000000-0000-0000-0000-000000000099
+      library:   00000000-0000-0000-0000-000000000005
+
+policies:
+  file:
+    # A file removed from a tracked branch should be deleted from
+    # IronRAG so chunks/embeddings/graph reflect current truth.
+    on_missing: delete
