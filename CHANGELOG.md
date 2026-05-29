@@ -1,5 +1,19 @@
 # Git Repositories ↔ IronRAG connector — Changelog
 
+## 0.0.3 — 2026-05-30
+
+- Binary blobs are no longer ingested. Detection is content-based — a
+  blob is binary iff it carries a NUL byte in its first sniff window
+  (the same heuristic git uses), so every text extension is ingested
+  (including unknown ones) while images, archives, and compiled
+  artifacts are skipped. No extension blocklist is consulted.
+- `.gitignore` is honoured implicitly: enumeration walks the committed
+  tree via `git ls-tree`, which never lists ignored/untracked files.
+- Unknown text files now default to `text/plain` instead of
+  `application/octet-stream`.
+- Build against framework `v0.0.3` (content-addressed idempotency keys,
+  single-request external-key lookup, cursor document-id persistence).
+
 ## 0.0.1 — 2026-05-23
 
 Initial public release on top of the

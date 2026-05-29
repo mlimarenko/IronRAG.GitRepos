@@ -1,6 +1,6 @@
 [project]
 name = "ironrag-gitrepos-connector"
-version = "0.0.1"
+version = "0.0.3"
 description = "Git-repository connector for IronRAG, built on the ironrag-connector framework."
 readme = "README.md"
 requires-python = ">=3.12"

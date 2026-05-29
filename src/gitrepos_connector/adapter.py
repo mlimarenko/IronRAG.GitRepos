@@ -184,7 +184,23 @@ class GitReposAdapter(SourceAdapter):
                 error=str(exc),
             )
             return None
-        mime = _guess_mime(path, payload)
+        if _looks_binary(payload):
+            # Ingest every text extension but never binary blobs (images,
+            # archives, compiled artifacts). Detection is content-based, not
+            # an extension blocklist: a blob is binary iff it carries a NUL
+            # byte in its first sniff window — the same heuristic git uses to
+            # classify a blob for diffs. This stays language/extension
+            # agnostic, so an unknown text extension is still ingested while
+            # a mislabelled `.txt` that is actually binary is skipped.
+            log.info(
+                "gitrepos.file.skipped_binary",
+                repo=repo_slug,
+                branch=branch,
+                path=path,
+                size=len(payload),
+            )
+            return None
+        mime = _guess_mime(path)
         return SourceItem(
             ref=ref,
             payload=payload,
@@ -280,17 +296,27 @@ def _forge_of(https_url: str) -> str:
     return "github"
 
 
-def _guess_mime(path: str, payload: bytes) -> str:
+_BINARY_SNIFF_BYTES = 8000
+"""Window git itself inspects to classify a blob as binary."""
+
+
+def _looks_binary(payload: bytes) -> bool:
+    """A blob is binary iff it contains a NUL byte in its first sniff window.
+
+    This mirrors git's own ``buffer_is_binary`` heuristic. It is
+    encoding-agnostic: UTF-8, UTF-16-without-BOM aside, and legacy 8-bit
+    text encodings (which never embed NUL) are treated as text, while
+    images / archives / executables / compiled objects (which do) are
+    treated as binary. No extension list is consulted.
+    """
+    return b"\x00" in payload[:_BINARY_SNIFF_BYTES]
+
+
+def _guess_mime(path: str) -> str:
+    # Binary blobs are already filtered out before this point, so an unknown
+    # extension is text — fall back to text/plain rather than octet-stream.
     guessed, _ = mimetypes.guess_type(path)
-    if guessed:
-        return guessed
-    # Heuristic: if the first chunk is printable utf-8, treat as text/plain.
-    head = payload[:4096]
-    try:
-        head.decode("utf-8")
-        return "text/plain"
-    except UnicodeDecodeError:
-        return "application/octet-stream"
+    return guessed or "text/plain"
 
 
 __all__ = ["DEFAULT_EXCLUDES", "GitReposAdapter"]

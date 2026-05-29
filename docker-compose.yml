@@ -1,0 +1,36 @@
+# IronRAG ↔ Git Repositories connector — deployment compose.
+#
+#   cp .env.example .env.local             # IRONRAG_* + ADMIN_BEARER_TOKEN
+#   cp repos.yaml.example repos.yaml       # repos + branches + include/exclude
+#   cp routing.yaml.example routing.yaml   # map files → (workspace, library)
+#   docker compose up -d
+#   docker compose logs -f
+#
+# `image:` pulls the release image published by CI on every GitHub release.
+# To run a locally built image instead, comment `image:` and uncomment `build: .`.
+services:
+  gitrepos-connector:
+    image: pipingspace/ironrag.gitrepos:latest
+    # build: .
+    container_name: ironrag-gitrepos-connector
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    volumes:
+      # Tracked-repos + routing config (read-only).
+      - ./repos.yaml:/app/repos.yaml:ro
+      - ./routing.yaml:/app/routing.yaml:ro
+      # Bare clones (GITREPOS_CLONE_ROOT) + SQLite cursor (STATE_DB_PATH)
+      # both live under this volume, so restarts reuse the clone cache and
+      # ship only the diff.
+      - gitrepos-state:/var/lib/ironrag-connector
+      # Private repos over SSH: mount a read-only deploy key + known_hosts.
+      # The container runs as root, so its HOME is /root.
+      # - ./deploy_key:/root/.ssh/id_ed25519:ro
+      # - ./known_hosts:/root/.ssh/known_hosts:ro
+    # Only needed for RUN_MODE=webhook/both. Bound to localhost.
+    ports:
+      - "127.0.0.1:8088:8088"
+
+volumes:
+  gitrepos-state:

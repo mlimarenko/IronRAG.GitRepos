@@ -244,6 +244,107 @@ async def test_routing_facts_payload(tmp_repo_factory, state_root: Path) -> None
     assert "repo_url" not in facts
 
 
+async def test_binary_files_are_skipped(tmp_repo_factory, state_root: Path) -> None:
+    repo = tmp_repo_factory("withbin")
+    repo.write("readme.md", "# text\n")
+    # PNG-ish header followed by a NUL byte -> classified binary by content.
+    repo.write("logo.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRbinary")
+    repo.commit("init")
+
+    repos_yaml = write_repos_yaml(
+        state_root / "repos.yaml",
+        [{"name": "withbin", "local_path": str(repo.path), "branches": ["main"]}],
+    )
+    settings = make_settings(state_root=state_root, repos_yaml=repos_yaml)
+    adapter = GitReposAdapter(settings)
+
+    refs = await _collect(adapter)
+    # Both files are tracked, so both are enumerated...
+    paths = sorted(r.routing_facts["path"] for r in refs)
+    assert paths == ["logo.png", "readme.md"]
+    # ...but the binary blob is dropped at fetch time, the text file is kept.
+    text_ref = next(r for r in refs if r.routing_facts["path"] == "readme.md")
+    bin_ref = next(r for r in refs if r.routing_facts["path"] == "logo.png")
+    assert await adapter.fetch(text_ref) is not None
+    assert await adapter.fetch(bin_ref) is None
+
+
+async def test_non_utf8_text_is_ingested(tmp_repo_factory, state_root: Path) -> None:
+    """A legacy 8-bit encoded text file (no NUL byte) is text, not binary."""
+    repo = tmp_repo_factory("legacy")
+    payload = "café déjà vu".encode("latin-1")  # not valid utf-8, but no NUL
+    repo.write("notes.txt", payload)
+    repo.commit("init")
+
+    repos_yaml = write_repos_yaml(
+        state_root / "repos.yaml",
+        [{"name": "legacy", "local_path": str(repo.path), "branches": ["main"]}],
+    )
+    settings = make_settings(state_root=state_root, repos_yaml=repos_yaml)
+    adapter = GitReposAdapter(settings)
+
+    refs = await _collect(adapter)
+    item = await adapter.fetch(refs[0])
+    assert item is not None
+    assert item.payload == payload
+    assert item.mime_type == "text/plain"
+
+
+async def test_gitignore_excludes_untracked_files(
+    tmp_repo_factory, state_root: Path
+) -> None:
+    """.gitignore is obeyed for free: git does not track ignored files, so
+    ls-tree never lists them. Force-added files would be tracked and thus
+    visible — which is correct (they are part of the repo)."""
+    repo = tmp_repo_factory("ignoring")
+    repo.write(".gitignore", "*.log\nsecrets/\n")
+    repo.write("keep.md", "tracked content")
+    repo.write("debug.log", "ignored noise")      # matched by *.log
+    repo.write("secrets/key.txt", "ignored dir")  # matched by secrets/
+    repo.commit("init")  # `git add -A` skips ignored paths
+
+    repos_yaml = write_repos_yaml(
+        state_root / "repos.yaml",
+        [{"name": "ignoring", "local_path": str(repo.path), "branches": ["main"]}],
+    )
+    settings = make_settings(state_root=state_root, repos_yaml=repos_yaml)
+    adapter = GitReposAdapter(settings)
+
+    refs = await _collect(adapter)
+    paths = sorted(r.routing_facts["path"] for r in refs)
+    assert "keep.md" in paths
+    assert ".gitignore" in paths  # itself tracked
+    assert "debug.log" not in paths
+    assert "secrets/key.txt" not in paths
+
+
+async def test_deleted_file_no_longer_emitted(
+    tmp_repo_factory, state_root: Path
+) -> None:
+    """A committed deletion drops the file from the sweep set; the framework
+    reaper then deletes the orphaned IronRAG document."""
+    repo = tmp_repo_factory("deleting")
+    repo.write("a.md", "alpha")
+    repo.write("b.md", "bravo")
+    repo.commit("init")
+
+    repos_yaml = write_repos_yaml(
+        state_root / "repos.yaml",
+        [{"name": "deleting", "local_path": str(repo.path), "branches": ["main"]}],
+    )
+    settings = make_settings(state_root=state_root, repos_yaml=repos_yaml)
+
+    refs_before = await _collect(GitReposAdapter(settings))
+    assert sorted(r.routing_facts["path"] for r in refs_before) == ["a.md", "b.md"]
+
+    repo.remove("b.md")
+    repo.commit("remove b")
+
+    refs_after = await _collect(GitReposAdapter(settings))
+    paths_after = sorted(r.routing_facts["path"] for r in refs_after)
+    assert paths_after == ["a.md"]
+
+
 async def test_external_key_round_trip_through_adapter(
     tmp_repo_factory, state_root: Path
 ) -> None:

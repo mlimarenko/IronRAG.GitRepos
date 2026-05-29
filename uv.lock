@@ -209,7 +209,7 @@ wheels = [
 
 [[package]]
 name = "ironrag-connector"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "../connectortemplate" }
 dependencies = [
     { name = "fastapi" },
@@ -243,7 +243,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "ironrag-gitrepos-connector"
-version = "0.0.1"
+version = "0.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "ironrag-connector" },

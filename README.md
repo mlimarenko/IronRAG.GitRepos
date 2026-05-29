@@ -2,8 +2,9 @@
 <p align="center"><b>Mirror one or many git repositories — remote or local, single- or multi-branch — into <a href="https://github.com/mlimarenko/IronRAG">IronRAG</a>: bare-clone + periodic <code>git fetch</code>, blob-sha diff, per-file routing.</b></p>
 
 <p align="center">
+  <a href="https://github.com/mlimarenko/IronRAG.GitRepos/releases"><img src="https://img.shields.io/github/v/release/mlimarenko/IronRAG.GitRepos?style=flat-square&label=release" alt="Release"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/docker/pulls/pipingspace/ironrag.gitrepos?style=flat-square&label=docker%20pulls" alt="Docker pulls">
+  <a href="https://hub.docker.com/r/pipingspace/ironrag.gitrepos"><img src="https://img.shields.io/docker/pulls/pipingspace/ironrag.gitrepos?style=flat-square&label=docker%20pulls" alt="Docker pulls"></a>
   <img src="https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square" alt="Python">
 </p>
 
@@ -103,6 +104,28 @@ A periodic sweep also runs in the background per `RUN_MODE` and
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — sweep flow,
   external-key layout, failure modes specific to git.
 - [CHANGELOG.md](./CHANGELOG.md) — release notes.
+
+## Deploy with Docker Compose
+
+```bash
+cp .env.example .env.local             # IRONRAG_* + ADMIN_BEARER_TOKEN
+cp repos.yaml.example repos.yaml       # repos + branches + include/exclude
+cp routing.yaml.example routing.yaml   # map files → (workspace, library)
+docker compose up -d
+docker compose logs -f
+```
+
+[`docker-compose.yml`](docker-compose.yml) pulls the released image and mounts
+`repos.yaml` + `routing.yaml` read-only. The bare clones and the SQLite cursor
+share one named volume, so a restart reuses the clone cache and ships only the
+diff. For private repositories over SSH, uncomment the deploy-key mount in the
+compose file.
+
+## Related
+
+- [IronRAG](https://github.com/mlimarenko/IronRAG) — the RAG backend these connectors feed.
+- [Connector Template](https://github.com/mlimarenko/IronRAG.ConnectorTemplate) — the framework every connector builds on.
+- Connectors: [Confluence](https://github.com/mlimarenko/IronRAG.Confluence) · [BookStack](https://github.com/mlimarenko/IronRAG.BookStack) · [Git Repositories](https://github.com/mlimarenko/IronRAG.GitRepos)
 
 ## License
 
